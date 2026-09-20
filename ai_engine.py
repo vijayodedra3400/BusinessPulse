@@ -37,23 +37,25 @@ _MODEL   = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip()
 
 _PLACEHOLDER_KEYS = {"", "your_gemini_api_key_here", "YOUR_KEY_HERE", "GEMINI_API_KEY="}
 
-_client     = None
-_init_error = None
+_client          = None
+_init_error      = None
+_USER_KEY_ACTIVE = False
 
 
 def _init():
-    global _client, _init_error, _API_KEY, _MODEL
+    global _client, _init_error, _API_KEY, _MODEL, _USER_KEY_ACTIVE
     try:
         from dotenv import load_dotenv
         load_dotenv(override=True)
     except ImportError:
         pass
 
-    _API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+    if not _USER_KEY_ACTIVE:
+        _API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
     _MODEL   = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip()
 
     if not _API_KEY or _API_KEY in _PLACEHOLDER_KEYS:
-        _init_error = "GEMINI_API_KEY not configured. Add it to your .env file."
+        _init_error = "GEMINI_API_KEY not configured. Enter your key in the sidebar."
         _client = None
         return
     try:
@@ -73,15 +75,44 @@ def _init():
 _init()
 
 
+def set_user_api_key(user_key: str) -> dict:
+    """
+    Configure or update a user-provided Gemini API key at runtime.
+    Returns provider_status().
+    """
+    global _client, _init_error, _API_KEY, _USER_KEY_ACTIVE
+    clean_key = (user_key or "").strip()
+
+    if not clean_key or clean_key in _PLACEHOLDER_KEYS:
+        _USER_KEY_ACTIVE = False
+        _init()
+        return provider_status()
+
+    try:
+        import google.genai as genai
+        _client = genai.Client(api_key=clean_key)
+        _API_KEY = clean_key
+        _USER_KEY_ACTIVE = True
+        _init_error = None
+        logger.info("User-provided Gemini API key set successfully.")
+    except Exception as exc:
+        _init_error = f"Invalid API Key: {exc}"
+        _client = None
+        _USER_KEY_ACTIVE = False
+
+    return provider_status()
+
+
 def ai_available() -> bool:
     return _client is not None
 
 
 def provider_status() -> dict:
     if _client:
-        return {"status": "live", "label": f"Gemini Active ({_MODEL})", "model": _MODEL}
+        tag = " (User Key)" if _USER_KEY_ACTIVE else f" ({_MODEL})"
+        return {"status": "live", "label": f"Gemini Active{tag}", "model": _MODEL, "is_user_key": _USER_KEY_ACTIVE}
     return {"status": "unavailable", "label": "Gemini Offline",
-            "reason": _init_error or "Unknown", "model": _MODEL}
+            "reason": _init_error or "Unknown", "model": _MODEL, "is_user_key": False}
 
 
 _SYSTEM = """You are BusinessPulse AI, a business analytics explanation assistant.

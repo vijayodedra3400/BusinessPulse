@@ -740,13 +740,33 @@ def main():
     # Sidebar Data Controls & Filters
     with st.sidebar:
         st.markdown("### ⚙️ Engine Controls")
+        
+        # Bring Your Own Key widget for cloud/public deployment
+        if "user_gemini_key" not in st.session_state:
+            st.session_state.user_gemini_key = ""
+
+        user_key_input = st.text_input(
+            "🔑 Bring Your Own Gemini Key",
+            type="password",
+            value=st.session_state.user_gemini_key,
+            help="Deploying on public cloud? Enter your free Gemini API key from https://aistudio.google.com/",
+            placeholder="Enter API key...",
+        )
+
+        if user_key_input != st.session_state.user_gemini_key:
+            st.session_state.user_gemini_key = user_key_input
+            ai.set_user_api_key(user_key_input)
+
         ps = ai.provider_status()
         if ps["status"] == "live":
-            st.success(f"Gemini API Live ({ps['model']})")
+            if ps.get("is_user_key"):
+                st.success("✦ Gemini Active (BYO Key)")
+            else:
+                st.success(f"✦ Gemini Active ({ps['model']})")
         elif ps["status"] == "mock":
-            st.info("AI Mock Mode Active")
+            st.info("✦ AI Mock Mode Active")
         else:
-            st.warning("AI Offline (Missing Key)")
+            st.warning("✦ AI Offline (Enter API Key above)")
 
         st.markdown("---")
         st.markdown("### 📂 Data Ingestion")
